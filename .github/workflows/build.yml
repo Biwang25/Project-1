@@ -64,9 +64,23 @@ jobs:
           # Clean previous builds
           buildozer android clean
 
-          # Build APKs without deploy run
-          buildozer android debug --verbose
-          buildozer android release --verbose
+          # Build APKs without deploy run, capture logs
+          buildozer android debug --verbose 2>&1 | tee build_debug.log
+          buildozer android release --verbose 2>&1 | tee build_release.log
+
+      - name: Save build debug logs
+        if: always()
+        run: |
+          echo "Saving build debug log..."
+          cat build_debug.log
+          # Optionally upload logs as artifact if needed
+
+      - name: Save build release logs
+        if: always()
+        run: |
+          echo "Saving build release log..."
+          cat build_release.log
+          # Optionally upload logs as artifact if needed
 
       - name: Locate APKs
         id: find_apks
