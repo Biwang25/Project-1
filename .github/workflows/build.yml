@@ -9,24 +9,73 @@ jobs:
   build:
     runs-on: ubuntu-22.04
 
+    env:
+      ANDROID_HOME: /usr/local/android-sdk
+      ANDROID_SDK_ROOT: /usr/local/android-sdk
+      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Print runner info
-        run: |
-          echo "Runner: $RUNNER_NAME"
-          echo "OS: $RUNNER_OS"
-          echo "Temp: $RUNNER_TEMP"
-
       - name: Install Python 3.10
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev python3-pip
+          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev python3-pip unzip wget openjdk-17-jdk
           python3.10 -m pip install --upgrade pip
         shell: bash
 
-      - name: Test Python
+      - name: Install Android SDK + Build-tools + NDK
         run: |
-          python3.10 --version
-          pip --version
+          sudo mkdir -p /usr/local/android-sdk
+          sudo chown $USER /usr/local/android-sdk
+          export ANDROID_SDK_ROOT=/usr/local/android-sdk
+
+          # Download command line tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-101.0.0_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip -d /usr/local/android-sdk/cmdline-tools
+          mkdir -p /usr/local/android-sdk/cmdline-tools/latest
+          mv /usr/local/android-sdk/cmdline-tools/cmdline-tools/* /usr/local/android-sdk/cmdline-tools/latest/
+
+          # Accept licenses
+          yes | /usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+
+          # Install required SDK packages
+          yes | /usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager \
+            "platform-tools" \
+            "platforms;android-33" \
+            "build-tools;33.0.2" \
+            "ndk;23.1.7779620"
+
+          echo "/usr/local/android-sdk/platform-tools" >> $GITHUB_PATH
+          echo "/usr/local/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+        shell: bash
+
+      - name: Install Buildozer & Cython
+        run: |
+          python3.10 -m pip install --upgrade buildozer cython
+        shell: bash
+
+      - name: Build APK
+        run: |
+          python3.10 -m buildozer android debug --verbose
+        shell: bash
+
+      - name: Locate APK
+        id: find_apk
+        run: |
+          APK=$(find .buildozer -type f -name "*.apk" | head -n1)
+          if [ -z "$APK" ]; then
+            echo "No APK found!"
+            exit 1
+          else
+            echo "APK found: $APK"
+            echo "apk_path=$APK" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: android-apk
+          path: ${{ steps.find_apk.outputs.apk_path }}
