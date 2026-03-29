@@ -9,23 +9,9 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout source
         uses: actions/checkout@v4
 
-      # 2️⃣ Print runner info
-      - name: Check runner availability
-        run: |
-          echo "Runner name: $RUNNER_NAME"
-          echo "Runner OS: $RUNNER_OS"
-          echo "Runner temp: $RUNNER_TEMP"
-          if [ -d "/home/runner" ]; then
-            echo "GitHub-hosted runner detected."
-          else
-            echo "Self-hosted runner detected. Ensure it is online and has correct labels."
-          fi
-
-      # 3️⃣ Install Python 3.11
       - name: Install Python 3.11
         run: |
           sudo apt-get update -y
@@ -35,7 +21,6 @@ jobs:
           sudo apt-get install -y python3.11 python3.11-venv python3.11-dev python3-pip
           python3.11 -m pip install --upgrade pip
 
-      # 4️⃣ Install system dependencies
       - name: Install system dependencies
         run: |
           sudo apt-get install -y build-essential git zip unzip openjdk-17-jdk \
@@ -43,41 +28,18 @@ jobs:
             libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev \
             libavcodec-dev zlib1g-dev
 
-      # 5️⃣ Install Buildozer and Cython
-      - name: Install Buildozer and Cython
-        run: |
-          python3.11 -m pip install --upgrade buildozer cython
+      - name: Install Buildozer
+        run: python3.11 -m pip install --upgrade buildozer cython
 
-      # 6️⃣ Show Buildozer version
-      - name: Show Buildozer version
-        run: buildozer --version || true
-
-      # 7️⃣ Cache Buildozer global
-      - name: Cache Buildozer global
-        uses: actions/cache@v4
-        with:
-          path: .buildozer_global
-          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
-
-      # 8️⃣ Cache Buildozer local
-      - name: Cache Buildozer local
-        uses: actions/cache@v4
-        with:
-          path: .buildozer
-          key: ${{ runner.os }}-${{ github.run_id }}-${{ hashFiles('buildozer.spec') }}
-
-      # 9️⃣ Build APK
       - name: Build APK (debug)
         run: |
           python3.11 -m buildozer android debug || true
 
-      # 🔹 List APKs for debugging
-      - name: List APK artifacts
+      - name: Show all files
         run: |
-          echo "Listing all APKs built:"
-          find . -type f -name "*.apk"
+          echo "Listing all files recursively..."
+          find . -type f
 
-      # 🔹 Upload APKs
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v3
         with:
