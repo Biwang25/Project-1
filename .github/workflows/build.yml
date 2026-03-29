@@ -73,29 +73,27 @@ jobs:
         run: |
           echo "Saving build debug log..."
           cat build_debug.log
-          # Optionally upload logs as artifact if needed
 
       - name: Save build release logs
         if: always()
         run: |
           echo "Saving build release log..."
           cat build_release.log
-          # Optionally upload logs as artifact if needed
 
       - name: Locate APKs
         id: find_apks
         run: |
           echo "Listing APK files:"
-          find . -name "*.apk"
-          APKS=$(find . -name "*.apk")
-          if [ -z "$APKS" ]; then
+          mkdir -p apks
+          find . -name "*.apk" -exec cp {} apks/ \;
+          if [ ! "$(ls -A apks)" ]; then
             echo "No APKs found!"
             exit 1
           fi
-          echo "apk_paths=$(echo $APKS | tr '\n' ' ')" >> $GITHUB_OUTPUT
+          echo "APKS_DIR=apks" >> $GITHUB_OUTPUT
 
       - name: Upload APK artifacts
         uses: actions/upload-artifact@v4
         with:
           name: android-apks
-          path: ${{ steps.find_apks.outputs.apk_paths }}
+          path: ${{ steps.find_apks.outputs.APks_DIR }}
