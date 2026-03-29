@@ -34,17 +34,18 @@ jobs:
           python3.10 -m pip install --upgrade pip
         shell: bash
 
-           # 4️⃣ Install Android SDK + Build-tools + NDK (WORKING)
+              # 4️⃣ Install Android SDK + Build-tools + NDK (WORKING)
       - name: Install Android SDK + Build-tools + NDK
         run: |
+          sudo dpkg --add-architecture i386
           sudo apt-get update -y
-          sudo apt-get install -y wget unzip lib32stdc++6 lib32z1
+          sudo apt-get install -y wget unzip openjdk-17-jdk python3-pip \
+              lib32stdc++6 lib32z1 lib32ncurses6 lib32gcc-s1 lib32gcc1
 
           # Create SDK directories
-          sudo mkdir -p /usr/local/android-sdk/cmdline-tools
-          sudo chown $USER /usr/local/android-sdk -R
           export ANDROID_SDK_ROOT=/usr/local/android-sdk
-          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
+          sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
+          sudo chown $USER $ANDROID_SDK_ROOT -R
 
           # Download latest command line tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
@@ -54,6 +55,7 @@ jobs:
 
           # Make sdkmanager executable
           chmod +x $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
 
           # Accept licenses
           yes | sdkmanager --licenses
@@ -62,10 +64,11 @@ jobs:
           sdkmanager --update
           sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;23.1.7779620"
 
-          # Add to PATH permanently for CI
+          # Add SDK tools permanently to PATH
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
         shell: bash
+        
       # 5️⃣ Install Buildozer & Cython
       - name: Install Buildozer & Cython
         run: |
