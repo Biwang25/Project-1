@@ -9,63 +9,72 @@ jobs:
     runs-on: ubuntu-22.04
 
     steps:
+      # 1️⃣ Checkout repository
       - name: Checkout source
         uses: actions/checkout@v4
 
+      # 2️⃣ Print runner info
       - name: Check runner availability
         run: |
           echo "Runner name: $RUNNER_NAME"
           echo "Runner OS: $RUNNER_OS"
           echo "Runner temp: $RUNNER_TEMP"
           if [ -d "/home/runner" ]; then
-            echo "This appears to be a GitHub-hosted runner."
+            echo "GitHub-hosted runner detected."
           else
-            echo "Runner may be self-hosted. Ensure runner is online and has correct labels."
+            echo "Self-hosted runner detected. Ensure it is online and has correct labels."
           fi
 
+      # 3️⃣ Get current date for caching
       - name: Get Date
         id: get-date
         run: echo "date=$(date -u +'%Y%m%d')" >> $GITHUB_OUTPUT
 
+      # 4️⃣ Cache Buildozer global config
       - name: Cache Buildozer global
         uses: actions/cache@v4
         with:
           path: .buildozer_global
           key: buildozer-global-${{ hashFiles('buildozer.spec') }}
 
+      # 5️⃣ Cache Buildozer local build
       - name: Cache Buildozer local
         uses: actions/cache@v4
         with:
           path: .buildozer
           key: ${{ runner.os }}-${{ steps.get-date.outputs.date }}-${{ hashFiles('buildozer.spec') }}
 
+      # 6️⃣ Install dependencies
       - name: Install dependencies
         run: |
           set -euo pipefail
           sudo apt-get update -y
-          sudo apt-get install -y python3-pip build-essential git zip unzip openjdk-17-jdk \
+          sudo apt-get install -y \
+            python3-pip build-essential git zip unzip openjdk-17-jdk \
             python3-dev ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev \
             libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev \
             libavcodec-dev zlib1g-dev
           python3 -m pip install --upgrade pip
           python3 -m pip install --upgrade buildozer cython
 
+      # 7️⃣ Show Buildozer version
       - name: Show Buildozer version
         run: |
           if command -v buildozer >/dev/null 2>&1; then
             buildozer --version || true
           else
-            echo "buildozer not in PATH yet"
+            echo "Buildozer not in PATH yet."
           fi
 
-      - name: Build with Buildozer
+      # 8️⃣ Build APK
+      - name: Build APK with Buildozer
         id: buildozer
         uses: ArtemSBulgakov/buildozer-action@v1
         with:
           command: buildozer android debug
           buildozer_version: stable
 
-      # Try to upload artifact using filename provided by the buildozer action (if any)
+      # 9️⃣ Upload APK (if Buildozer provides the path)
       - name: Upload APK (from action output)
         if: ${{ steps.buildozer.outputs.filename != '' }}
         uses: actions/upload-artifact@v3
@@ -73,7 +82,7 @@ jobs:
           name: package
           path: ${{ steps.buildozer.outputs.filename }}
 
-      # Fallback: find an APK in common locations and set it as an output
+      # 🔹 Fallback: search for APK manually
       - name: Fallback: find APK
         id: find-apk
         if: ${{ steps.buildozer.outputs.filename == '' }}
@@ -103,18 +112,16 @@ jobs:
           done
 
           if [ -z "$found" ]; then
-            echo "No APK found in common locations. Listing repository tree for debugging:"
-            ls -la
+            echo "No APK found. Listing files for debugging:"
             find . -type f -name "*.apk" -print || true
-            echo "apk_path="
             echo "apk_path=" >> $GITHUB_OUTPUT
             exit 0
           fi
 
           echo "Found APK: $found"
-          # Write to GitHub Actions outputs so subsequent steps can use it
           echo "apk_path=$found" >> $GITHUB_OUTPUT
 
+      # 🔹 Upload APK from fallback search
       - name: Upload APK (fallback)
         if: ${{ steps.buildozer.outputs.filename == '' && steps.find-apk.outputs.apk_path != '' }}
         uses: actions/upload-artifact@v3
@@ -122,6 +129,7 @@ jobs:
           name: package
           path: ${{ steps.find-apk.outputs.apk_path }}
 
+      # 🔹 Fail if no APK was produced
       - name: Fail if no APK produced
         if: ${{ steps.buildozer.outputs.filename == '' && (steps.find-apk.outputs.apk_path == '' || steps.find-apk.outputs.apk_path == null) }}
         run: |
