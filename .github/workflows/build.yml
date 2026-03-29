@@ -68,24 +68,19 @@ jobs:
           buildozer android debug --verbose 2>&1 | tee build_debug.log
           buildozer android release --verbose 2>&1 | tee build_release.log
 
-      - name: Save build debug logs
-        if: always()
+        # Debugging: list files after build to verify APKs
+      - name: List build output files
         run: |
-          echo "Saving build debug log..."
-          cat build_debug.log
-
-      - name: Save build release logs
-        if: always()
-        run: |
-          echo "Saving build release log..."
-          cat build_release.log
+          echo "Listing build output directory:"
+          ls -R
 
       - name: Locate APKs
         id: find_apks
         run: |
-          echo "Listing APK files:"
+          echo "Searching for APK files..."
           mkdir -p apks
-          find . -name "*.apk" -exec cp {} apks/ \;
+          # Adjust the path if your APKs are in a different directory
+          find ./bin -name "*.apk" -exec cp {} apks/ \;
           if [ ! "$(ls -A apks)" ]; then
             echo "No APKs found!"
             exit 1
@@ -97,3 +92,9 @@ jobs:
         with:
           name: android-apks
           path: ${{ steps.find_apks.outputs.APks_DIR }}
+
+      # Optional: Additional step to verify APKs
+      - name: Verify APKs
+        run: |
+          echo "Verifying APK files:"
+          ls -l apks
