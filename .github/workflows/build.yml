@@ -1,31 +1,28 @@
-name: CI
+name: CI - Build APK
 
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-22.04
+    env:
+      ANDROID_HOME: /usr/local/android-sdk
+      ANDROID_SDK_ROOT: /usr/local/android-sdk
+      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
     steps:
-      # 1️⃣ Checkout repository
       - name: Checkout source
         uses: actions/checkout@v4
 
-      # 2️⃣ Print runner info
-      - name: Check runner availability
+      - name: Runner info
         run: |
-          echo "Runner name: $RUNNER_NAME"
-          echo "Runner OS: $RUNNER_OS"
-          echo "Runner temp: $RUNNER_TEMP"
-          if [ -d "/home/runner" ]; then
-            echo "GitHub-hosted runner detected."
-          else
-            echo "Self-hosted runner detected. Ensure it is online and has correct labels."
-          fi
+          echo "Runner: $RUNNER_NAME"
+          echo "OS: $RUNNER_OS"
+          echo "Temp: $RUNNER_TEMP"
 
-      # 3️⃣ Install Python 3.11
       - name: Install Python 3.11
         run: |
           sudo apt-get update -y
@@ -34,52 +31,99 @@ jobs:
           sudo apt-get update -y
           sudo apt-get install -y python3.11 python3.11-venv python3.11-dev python3-pip
           python3.11 -m pip install --upgrade pip
+        shell: bash
 
-      # 4️⃣ Install system dependencies
-      - name: Install system dependencies
+      - name: Install system packages
         run: |
-          sudo apt-get install -y build-essential git zip unzip openjdk-17-jdk \
-            ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev \
-            libsdl2-ttf-dev libportmidi-dev libswscale-dev libavformat-dev \
-            libavcodec-dev zlib1g-dev
+          sudo apt-get update -y
+          sudo apt-get install -y build-essential git zip unzip curl wget openjdk-17-jdk \
+            ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
+            libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev
+        shell: bash
 
-      # 5️⃣ Install Buildozer and Cython
+      - name: Install Android SDK tools (sdkmanager)
+        run: |
+          set -euo pipefail
+          sudo mkdir -p /usr/local/android-sdk
+          sudo chown $USER: /usr/local/android-sdk
+          cd /tmp
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-101.0.0_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip -d /tmp/cmdline-tools
+          mkdir -p /usr/local/android-sdk/cmdline-tools/latest
+          mv /tmp/cmdline-tools/cmdline-tools/* /usr/local/android-sdk/cmdline-tools/latest/
+          export ANDROID_SDK_ROOT=/usr/local/android-sdk
+          yes | /usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=${ANDROID_SDK_ROOT} --licenses >/dev/null || true
+        shell: bash
+
+      - name: Install Android SDK packages required for Buildozer
+        run: |
+          set -euo pipefail
+          export ANDROID_SDK_ROOT=/usr/local/android-sdk
+          PATH="${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin:${ANDROID_SDK_ROOT}/platform-tools:${PATH}"
+          # Install platforms, build-tools, ndk, and platform-tools
+          yes | sdkmanager --sdk_root=${ANDROID_SDK_ROOT} "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653" >/dev/null
+          echo "Installed: $(ls -1 ${ANDROID_SDK_ROOT} | tr '\n' ',' )"
+        shell: bash
+
+      - name: Add Android SDK to PATH
+        run: |
+          echo "/usr/local/android-sdk/platform-tools" >> $GITHUB_PATH
+          echo "/usr/local/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+
       - name: Install Buildozer and Cython
-        run: python3.11 -m pip install --upgrade buildozer cython
+        run: |
+          python3.11 -m pip install --upgrade pip
+          python3.11 -m pip install --upgrade buildozer cython
+        shell: bash
 
-      # 6️⃣ Show Buildozer version
       - name: Show Buildozer version
-        run: buildozer --version || true
+        run: |
+          buildozer --version || true
+        shell: bash
 
-      # 7️⃣ Cache Buildozer global
-      - name: Cache Buildozer global
-        uses: actions/cache@v4
-        with:
-          path: .buildozer_global
-          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
-
-      # 8️⃣ Cache Buildozer local
-      - name: Cache Buildozer local
+      - name: Cache Buildozer state
         uses: actions/cache@v4
         with:
           path: .buildozer
-          key: ${{ runner.os }}-${{ github.run_id }}-${{ hashFiles('buildozer.spec') }}
+          key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}
 
-      # 9️⃣ Build APK
-      - name: Build APK (debug)
-        run: python3.11 -m buildozer android debug || true
-
-      # 🔹 List APKs for debugging
-      - name: Show APK locations
+      - name: Run Buildozer (debug)
+        id: build
         run: |
-          echo "Listing all APK files built:"
-          find . -type f -name "*.apk"
+          set -euo pipefail
+          # Ensure we use python3.11 for buildozer
+          python3.11 -m buildozer android debug
+        shell: bash
 
-      # 🔹 Upload APKs from both known paths
-      - name: Upload APK artifacts
+      - name: Dump Buildozer log & workspace (for debugging)
+        if: always()
+        run: |
+          echo "=== Buildozer log (if present) ==="
+          test -f ./.buildozer/android/platform/buildozer.log && sed -n '1,400p' ./.buildozer/android/platform/buildozer.log || true
+          echo "=== Top-level files ==="
+          ls -la
+          echo "=== Find artifacts (.apk/.aab) ==="
+          find . -type f \( -name "*.apk" -o -name "*.aab" \) -print || true
+        shell: bash
+
+      - name: Find APK or AAB
+        id: find_artifact
+        run: |
+          set -euo pipefail
+          found=$(find . -type f \( -name "*.apk" -o -name "*.aab" \) -print -quit || true)
+          echo "found=$found" >> $GITHUB_OUTPUT
+        shell: bash
+
+      - name: Upload artifact (if found)
+        if: ${{ steps.find_artifact.outputs.found != '' }}
         uses: actions/upload-artifact@v3
         with:
           name: package
-          path: |
-            bin/*.apk
-            .buildozer/android/platform/build/outputs/apk/debug/*.apk
+          path: ${{ steps.find_artifact.outputs.found }}
+
+      - name: Fail if no artifact produced
+        if: ${{ steps.find_artifact.outputs.found == '' }}
+        run: |
+          echo "ERROR: No .apk or .aab was produced by Buildozer."
+          exit 1
+        shell: bash
