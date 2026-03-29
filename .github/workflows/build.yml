@@ -13,6 +13,7 @@ jobs:
       ANDROID_HOME: /usr/local/android-sdk
       ANDROID_SDK_ROOT: /usr/local/android-sdk
       JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+      PATH: ${{ env.ANDROID_HOME }}/platform-tools:${{ env.ANDROID_HOME }}/cmdline-tools/latest/bin:$PATH
 
     steps:
       # 1️⃣ Checkout repository
@@ -32,7 +33,6 @@ jobs:
           sudo dpkg --add-architecture i386
           sudo apt-get update -y
 
-          # Required packages for Buildozer + Android SDK
           sudo apt-get install -y \
             python3.10 python3.10-venv python3.10-dev python3-pip unzip wget openjdk-17-jdk \
             lib32z1 lib32ncurses6 lib32stdc++6 lib32gcc-s1 libc6-i386 \
@@ -66,28 +66,28 @@ jobs:
         run: |
           python3.10 -m pip install --upgrade buildozer cython
 
-     - name: Build APKs (Debug + Release) - Fixed
-  run: |
-    export ANDROID_SDK_ROOT=/usr/local/android-sdk
-    export ANDROID_HOME=/usr/local/android-sdk
-    export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/23.1.7779620
-    export PATH=$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
-    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+      # 6️⃣ Build APKs (Debug + Release)
+      - name: Build APKs (Debug + Release)
+        run: |
+          export ANDROID_SDK_ROOT=/usr/local/android-sdk
+          export ANDROID_HOME=/usr/local/android-sdk
+          export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/23.1.7779620
+          export PATH=$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
-    # Accept licenses just before build
-    yes | sdkmanager --licenses
+          yes | sdkmanager --licenses
 
-    # Ensure architecture splits in buildozer.spec
-    sed -i 's|#android.arch = arm64-v8a|android.arch = armeabi-v7a, arm64-v8a, x86|' buildozer.spec
+          # Enable multiple architectures
+          sed -i 's|#android.arch = arm64-v8a|android.arch = armeabi-v7a, arm64-v8a, x86|' buildozer.spec
 
-    # Clean previous builds
-    python3.10 -m buildozer android clean
+          # Clean previous builds
+          python3.10 -m buildozer android clean
 
-    echo "Building debug APK..."
-    python3.10 -m buildozer android debug deploy run --verbose
+          echo "Building debug APK..."
+          python3.10 -m buildozer android debug deploy run --verbose
 
-    echo "Building release APK..."
-    python3.10 -m buildozer android release deploy run --verbose
+          echo "Building release APK..."
+          python3.10 -m buildozer android release deploy run --verbose
 
       # 7️⃣ Locate all APKs
       - name: Locate APKs
@@ -98,10 +98,11 @@ jobs:
           if [ -z "$APKS" ]; then
             echo "No APKs found!"
             exit 1
-          else
-            echo "Found APKs:"
-            echo "$APKS"
-            echo "apk_paths=$APKS" >> $GITHUB_OUTPUT
+          fi
+          echo "Found APKs:"
+          echo "$APKS"
+          # Convert newlines to space-separated list
+          echo "apk_paths=$(echo $APKS | tr '\n' ' ')" >> $GITHUB_OUTPUT
 
       # 8️⃣ Upload all APK artifacts
       - name: Upload APK artifacts
