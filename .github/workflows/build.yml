@@ -9,14 +9,8 @@ jobs:
   build:
     runs-on: ubuntu-22.04
 
-    env:
-      ANDROID_HOME: /usr/local/android-sdk
-      ANDROID_SDK_ROOT: /usr/local/android-sdk
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
-      PATH: /usr/local/android-sdk/platform-tools:/usr/local/android-sdk/cmdline-tools/latest/bin:$PATH
-
     steps:
-      - name: Checkout repository
+      - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Install system dependencies
@@ -64,8 +58,13 @@ jobs:
 
           yes | sdkmanager --licenses
 
+          # Ensure multiple architectures
           sed -i 's|#android.arch = arm64-v8a|android.arch = armeabi-v7a, arm64-v8a, x86|' buildozer.spec
+
+          # Clean previous builds
           buildozer android clean
+
+          # Build APKs without deploy run
           buildozer android debug --verbose
           buildozer android release --verbose
 
