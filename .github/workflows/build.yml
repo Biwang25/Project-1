@@ -71,7 +71,9 @@ jobs:
       - name: Locate APKs
         id: find_apks
         run: |
-          APKS=$(find .buildozer -name "*.apk")
+          echo "Listing APK files:"
+          find . -name "*.apk"
+          APKS=$(find . -name "*.apk")
           if [ -z "$APKS" ]; then
             echo "No APKs found!"
             exit 1
