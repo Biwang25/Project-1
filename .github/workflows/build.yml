@@ -1,0 +1,48 @@
+name: CI
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-20.04
+
+    steps:
+      # 1️⃣ Checkout repository
+      - name: Checkout source
+        uses: actions/checkout@v2
+
+      # 2️⃣ Get current date (for caching)
+      - name: Get Date
+        id: get-date
+        run: echo "date=$(date -u +'%Y%m%d')" >> $GITHUB_ENV
+        shell: bash
+
+      # 3️⃣ Cache Buildozer global directory
+      - name: Cache Buildozer global directory
+        uses: actions/cache@v2
+        with:
+          path: .buildozer_global
+          key: buildozer-global-${{ hashFiles('buildozer.spec') }}
+
+      # 4️⃣ Cache Buildozer project directory
+      - name: Cache Buildozer project directory
+        uses: actions/cache@v2
+        with:
+          path: .buildozer
+          key: ${{ runner.os }}-${{ env.date }}-${{ hashFiles('buildozer.spec') }}
+
+      # 5️⃣ Build with Buildozer
+      - name: Build with Buildozer
+        uses: ArtemSBulgakov/buildozer-action@v1
+        id: buildozer
+        with:
+          command: buildozer android debug
+          buildozer_version: stable
+
+      # 6️⃣ Upload build artifact
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v2
+        with:
+          name: package
+          path: ${{ steps.buildozer.outputs.filename }}
