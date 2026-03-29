@@ -66,27 +66,28 @@ jobs:
         run: |
           python3.10 -m pip install --upgrade buildozer cython
 
-      # 6️⃣ Build APKs (Debug + Release) - Fixed
-      - name: Build APKs (Debug + Release)
-        run: |
-          # Set environment variables
-          export ANDROID_SDK_ROOT=/usr/local/android-sdk
-          export ANDROID_HOME=/usr/local/android-sdk
-          export PATH=$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
-          export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+     - name: Build APKs (Debug + Release) - Fixed
+  run: |
+    export ANDROID_SDK_ROOT=/usr/local/android-sdk
+    export ANDROID_HOME=/usr/local/android-sdk
+    export ANDROID_NDK_HOME=$ANDROID_SDK_ROOT/ndk/23.1.7779620
+    export PATH=$ANDROID_SDK_ROOT/platform-tools:$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$PATH
+    export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
 
-          # Ensure architecture splits in buildozer.spec
-          sed -i 's|#android.arch = arm64-v8a|android.arch = armeabi-v7a, arm64-v8a, x86|' buildozer.spec
+    # Accept licenses just before build
+    yes | sdkmanager --licenses
 
-          # Clean previous builds
-          python3.10 -m buildozer android clean
+    # Ensure architecture splits in buildozer.spec
+    sed -i 's|#android.arch = arm64-v8a|android.arch = armeabi-v7a, arm64-v8a, x86|' buildozer.spec
 
-          echo "Building debug APK..."
-          python3.10 -m buildozer android debug deploy run --verbose
+    # Clean previous builds
+    python3.10 -m buildozer android clean
 
-          echo "Building release APK..."
-          # Requires release key configured in buildozer.spec
-          python3.10 -m buildozer android release deploy run --verbose
+    echo "Building debug APK..."
+    python3.10 -m buildozer android debug deploy run --verbose
+
+    echo "Building release APK..."
+    python3.10 -m buildozer android release deploy run --verbose
 
       # 7️⃣ Locate all APKs
       - name: Locate APKs
