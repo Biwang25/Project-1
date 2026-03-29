@@ -15,7 +15,7 @@ jobs:
       JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
     steps:
-      # 1️⃣ Checkout the repository
+      # 1️⃣ Checkout repository
       - name: Checkout code
         uses: actions/checkout@v4
 
@@ -26,26 +26,22 @@ jobs:
           echo "OS: $RUNNER_OS"
           echo "Temp: $RUNNER_TEMP"
 
-      # 3️⃣ Install Python 3.10
-      - name: Install Python 3.10
-        run: |
-          sudo apt-get update -y
-          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev python3-pip unzip wget openjdk-17-jdk
-          python3.10 -m pip install --upgrade pip
-        shell: bash
-
-              # 4️⃣ Install Android SDK + Build-tools + NDK (WORKING)
-      - name: Install Android SDK + Build-tools + NDK
+      # 3️⃣ Install system dependencies + Python 3.10
+      - name: Install system dependencies
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update -y
-          sudo apt-get install -y wget unzip openjdk-17-jdk python3-pip \
+          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev python3-pip unzip wget openjdk-17-jdk \
               lib32stdc++6 lib32z1 lib32ncurses6 lib32gcc-s1 lib32gcc1
+          python3.10 -m pip install --upgrade pip
 
-          # Create SDK directories
+      # 4️⃣ Install Android SDK + Build-tools + NDK (fixed)
+      - name: Install Android SDK + Build-tools + NDK
+        run: |
           export ANDROID_SDK_ROOT=/usr/local/android-sdk
           sudo mkdir -p $ANDROID_SDK_ROOT/cmdline-tools
           sudo chown $USER $ANDROID_SDK_ROOT -R
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
 
           # Download latest command line tools
           wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
@@ -55,41 +51,32 @@ jobs:
 
           # Make sdkmanager executable
           chmod +x $ANDROID_SDK_ROOT/cmdline-tools/latest/bin/sdkmanager
-          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
 
-          # Accept licenses
+          # Accept licenses and install packages
           yes | sdkmanager --licenses
-
-          # Update SDK manager and install required packages
           sdkmanager --update
           sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;23.1.7779620"
 
-          # Add SDK tools permanently to PATH
+          # Add to PATH permanently
           echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
           echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
-        shell: bash
-        
+
       # 5️⃣ Install Buildozer & Cython
       - name: Install Buildozer & Cython
         run: |
           python3.10 -m pip install --upgrade buildozer cython
-        shell: bash
 
-      # 6️⃣ Build the APK
+      # 6️⃣ Build APK
       - name: Build APK
         run: |
           python3.10 -m buildozer android debug --verbose
-        shell: bash
 
       # 7️⃣ Locate APK
       - name: Locate APK
         id: find_apk
         run: |
           echo "Searching for debug APK..."
-          # Debug: print all APKs inside .buildozer
           find .buildozer -name "*.apk"
-
-          # Grab the first debug APK Buildozer generated
           APK=$(find .buildozer -name "*-debug.apk" | head -n1)
           if [ -z "$APK" ]; then
             echo "No APK found!"
@@ -98,7 +85,6 @@ jobs:
             echo "APK found: $APK"
             echo "apk_path=$APK" >> $GITHUB_OUTPUT
           fi
-        shell: bash
 
       # 8️⃣ Upload APK artifact
       - name: Upload APK artifact
