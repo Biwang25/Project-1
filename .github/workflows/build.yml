@@ -26,13 +26,18 @@ jobs:
           echo "OS: $RUNNER_OS"
           echo "Temp: $RUNNER_TEMP"
 
-      # 3️⃣ Install system dependencies + Python 3.10
+      # 3️⃣ Install system dependencies + Python 3.10 (fixed)
       - name: Install system dependencies
         run: |
           sudo dpkg --add-architecture i386
           sudo apt-get update -y
-          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev python3-pip unzip wget openjdk-17-jdk \
-              lib32stdc++6 lib32z1 lib32ncurses6 lib32gcc-s1 lib32gcc1
+
+          # Required packages for Buildozer + Android SDK
+          sudo apt-get install -y \
+            python3.10 python3.10-venv python3.10-dev python3-pip unzip wget openjdk-17-jdk \
+            lib32z1 lib32ncurses6 lib32stdc++6 lib32gcc-s1 libc6-i386 \
+            build-essential git curl
+
           python3.10 -m pip install --upgrade pip
 
       # 4️⃣ Install Android SDK + Build-tools + NDK
