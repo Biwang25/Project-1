@@ -6,7 +6,6 @@ on:
 
 jobs:
   build:
-    # Use an explicit, current GitHub-hosted runner label
     runs-on: ubuntu-22.04
 
     steps:
@@ -18,33 +17,28 @@ jobs:
           echo "Runner name: $RUNNER_NAME"
           echo "Runner OS: $RUNNER_OS"
           echo "Runner temp: $RUNNER_TEMP"
-          echo "GitHub hosted? Checking for /usr/bin/gh..."
           if [ -d "/home/runner" ]; then
             echo "This appears to be a GitHub-hosted runner."
           else
             echo "Runner may be self-hosted. Ensure runner is online and has correct labels."
           fi
 
-      # Get current date (for caching)
       - name: Get Date
         id: get-date
         run: echo "date=$(date -u +'%Y%m%d')" >> $GITHUB_OUTPUT
 
-      # Cache Buildozer global directory
       - name: Cache Buildozer global
         uses: actions/cache@v4
         with:
           path: .buildozer_global
           key: buildozer-global-${{ hashFiles('buildozer.spec') }}
 
-      # Cache local buildozer directory (per-day to avoid stale problems)
       - name: Cache Buildozer local
         uses: actions/cache@v4
         with:
           path: .buildozer
           key: ${{ runner.os }}-${{ steps.get-date.outputs.date }}-${{ hashFiles('buildozer.spec') }}
 
-      # Install system dependencies + Cython and other Python deps
       - name: Install dependencies
         run: |
           set -euo pipefail
@@ -56,65 +50,80 @@ jobs:
           python3 -m pip install --upgrade pip
           python3 -m pip install --upgrade buildozer cython
 
-      # Optional: print buildozer version for debugging
       - name: Show Buildozer version
         run: |
-          buildozer --version || echo "buildozer not in PATH yet"
+          if command -v buildozer >/dev/null 2>&1; then
+            buildozer --version || true
+          else
+            echo "buildozer not in PATH yet"
+          fi
 
-      # Build APK using the action
       - name: Build with Buildozer
         id: buildozer
         uses: ArtemSBulgakov/buildozer-action@v1
         with:
           command: buildozer android debug
           buildozer_version: stable
-        # The build may take many minutes; action logs will show progress.
 
-      # If the buildozer-action sets an output filename, upload that. Otherwise find the APK and upload.
-      - name: Upload APK artifact
-        id: upload
+      # Try to upload artifact using filename provided by the buildozer action (if any)
+      - name: Upload APK (from action output)
+        if: ${{ steps.buildozer.outputs.filename != '' }}
         uses: actions/upload-artifact@v3
         with:
           name: package
-          # Use the output filename when present; otherwise fall back to searching common build paths.
-          path: ${{ steps.buildozer.outputs.filename || '' }}
-      - name: Fallback: find APK and upload if previous upload had no file
-        if: steps.upload.outcome == 'failure' || steps.buildozer.outputs.filename == ''
+          path: ${{ steps.buildozer.outputs.filename }}
+
+      # Fallback: find an APK in common locations and set it as an output
+      - name: Fallback: find APK
+        id: find-apk
+        if: ${{ steps.buildozer.outputs.filename == '' }}
         run: |
-          set -e
-          echo "buildozer output filename was empty or upload failed. Searching for APK..."
-          # Common locations where Buildozer/Kivy might place built apks
+          set -euo pipefail
+          echo "Searching for APK artifacts..."
           candidates=(
             "bin/*.apk"
             "bin/*/*.apk"
-            "bin/*/*/*.apk"
             "dist/*/*.apk"
             ".buildozer/android/platform/build-arm64-v8a/dists/*/bin/*.apk"
             ".buildozer/android/platform/build/dists/*/bin/*.apk"
+            ".buildozer/android/platform/build/outputs/apk/*/*.apk"
+            ".buildozer/android/platform/build/outputs/apk/*.apk"
           )
-          found=0
-          for p in "${candidates[@]}"; do
-            matches=( $p )
-            if [ ${#matches[@]} -gt 0 ]; then
-              for f in "${matches[@]}"; do
+          found=""
+          for pattern in "${candidates[@]}"; do
+            files=( $pattern )
+            if [ ${#files[@]} -gt 0 ]; then
+              for f in "${files[@]}"; do
                 if [ -f "$f" ]; then
-                  echo "Found APK: $f"
-                  echo "::set-output name=apk_path::$f"
-                  found=1
+                  found="$f"
                   break 2
                 fi
               done
             fi
           done
-          if [ "$found" -eq 0 ]; then
-            echo "No APK found in standard locations. Listing tree for debugging:"
+
+          if [ -z "$found" ]; then
+            echo "No APK found in common locations. Listing repository tree for debugging:"
             ls -la
-            find . -type f -maxdepth 6 -name "*.apk" -print || true
-            exit 1
+            find . -type f -name "*.apk" -print || true
+            echo "apk_path="
+            echo "apk_path=" >> $GITHUB_OUTPUT
+            exit 0
           fi
-      - name: Upload found APK (fallback)
-        if: steps.upload.outcome == 'failure' || steps.buildozer.outputs.filename == ''
+
+          echo "Found APK: $found"
+          # Write to GitHub Actions outputs so subsequent steps can use it
+          echo "apk_path=$found" >> $GITHUB_OUTPUT
+
+      - name: Upload APK (fallback)
+        if: ${{ steps.buildozer.outputs.filename == '' && steps.find-apk.outputs.apk_path != '' }}
         uses: actions/upload-artifact@v3
         with:
           name: package
-          path: ${{ steps.fallback.outputs.apk_path || ${{ steps.buildozer.outputs.filename }} }}
+          path: ${{ steps.find-apk.outputs.apk_path }}
+
+      - name: Fail if no APK produced
+        if: ${{ steps.buildozer.outputs.filename == '' && (steps.find-apk.outputs.apk_path == '' || steps.find-apk.outputs.apk_path == null) }}
+        run: |
+          echo "ERROR: No APK was produced by Buildozer and none was found by fallback search."
+          exit 1
