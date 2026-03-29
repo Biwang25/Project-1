@@ -74,11 +74,16 @@ jobs:
           python3.10 -m buildozer android debug --verbose
         shell: bash
 
-      # 7️⃣ Locate the APK
+          # 7️⃣ Locate APK
       - name: Locate APK
         id: find_apk
         run: |
-          APK=$(find .buildozer -type f -name "*.apk" | head -n1)
+          echo "Searching for debug APK..."
+          # Print all APKs inside .buildozer for debugging
+          find .buildozer -name "*.apk"
+          
+          # Grab the first debug APK Buildozer generated
+          APK=$(find .buildozer -name "*-debug.apk" | head -n1)
           if [ -z "$APK" ]; then
             echo "No APK found!"
             exit 1
@@ -88,9 +93,9 @@ jobs:
           fi
         shell: bash
 
-      # 8️⃣ Upload APK artifact (new v4)
+      # 8️⃣ Upload APK artifact
       - name: Upload APK artifact
-        uses: github/actions/upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: android-apk
           path: ${{ steps.find_apk.outputs.apk_path }}
