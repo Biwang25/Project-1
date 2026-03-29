@@ -8,82 +8,25 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-    env:
-      ANDROID_HOME: /usr/local/android-sdk
-      ANDROID_SDK_ROOT: /usr/local/android-sdk
-      JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
     steps:
-      - name: Checkout source
+      - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install Python 3.11
+      - name: Print runner info
+        run: |
+          echo "Runner: $RUNNER_NAME"
+          echo "OS: $RUNNER_OS"
+          echo "Temp: $RUNNER_TEMP"
+
+      - name: Install Python 3.10
         run: |
           sudo apt-get update -y
-          sudo apt-get install -y software-properties-common
-          sudo add-apt-repository -y ppa:deadsnakes/ppa
-          sudo apt-get update -y
-          sudo apt-get install -y python3.11 python3.11-venv python3.11-dev python3-pip
-          python3.11 -m pip install --upgrade pip
+          sudo apt-get install -y python3.10 python3.10-venv python3.10-dev python3-pip
+          python3.10 -m pip install --upgrade pip
+        shell: bash
 
-      - name: Install system packages
+      - name: Test Python
         run: |
-          sudo apt-get update -y
-          sudo apt-get install -y build-essential git zip unzip curl wget openjdk-17-jdk \
-            ffmpeg libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev \
-            libportmidi-dev libswscale-dev libavformat-dev libavcodec-dev zlib1g-dev
-
-      - name: Install Android SDK tools
-        run: |
-          sudo mkdir -p /usr/local/android-sdk
-          sudo chown $USER: /usr/local/android-sdk
-          cd /tmp
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-101.0.0_latest.zip -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip -d /tmp/cmdline-tools
-          mkdir -p /usr/local/android-sdk/cmdline-tools/latest
-          mv /tmp/cmdline-tools/cmdline-tools/* /usr/local/android-sdk/cmdline-tools/latest/
-          yes | /usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses || true
-          /usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;25.2.9519653"
-
-      - name: Add Android SDK to PATH
-        run: |
-          echo "/usr/local/android-sdk/platform-tools" >> $GITHUB_PATH
-          echo "/usr/local/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
-
-      - name: Install Buildozer and Cython
-        run: |
-          python3.11 -m pip install --upgrade buildozer cython
-
-      - name: Clear old buildozer cache
-        run: rm -rf .buildozer
-
-      - name: Run Buildozer (debug)
-        id: build
-        run: |
-          python3.11 -m buildozer android debug --verbose
-
-      - name: Locate APK or AAB
-        id: find_artifact
-        run: |
-          apk=$(find .buildozer -type f -name "*.apk" | head -n1)
-          aab=$(find .buildozer -type f -name "*.aab" | head -n1)
-          if [ -n "$apk" ]; then
-            echo "found=$apk" >> $GITHUB_OUTPUT
-          elif [ -n "$aab" ]; then
-            echo "found=$aab" >> $GITHUB_OUTPUT
-          else
-            echo "found=" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Upload APK/AAB
-        if: ${{ steps.find_artifact.outputs.found != '' }}
-        uses: actions/upload-artifact@v3
-        with:
-          name: android-package
-          path: ${{ steps.find_artifact.outputs.found }}
-
-      - name: Fail if no artifact produced
-        if: ${{ steps.find_artifact.outputs.found == '' }}
-        run: |
-          echo "ERROR: No APK or AAB produced."
-          exit 1
+          python3.10 --version
+          pip --version
