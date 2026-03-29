@@ -15,9 +15,18 @@ jobs:
       JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
 
     steps:
+      # 1️⃣ Checkout the repository
       - name: Checkout code
         uses: actions/checkout@v4
 
+      # 2️⃣ Print runner info
+      - name: Print runner info
+        run: |
+          echo "Runner: $RUNNER_NAME"
+          echo "OS: $RUNNER_OS"
+          echo "Temp: $RUNNER_TEMP"
+
+      # 3️⃣ Install Python 3.10
       - name: Install Python 3.10
         run: |
           sudo apt-get update -y
@@ -25,6 +34,7 @@ jobs:
           python3.10 -m pip install --upgrade pip
         shell: bash
 
+      # 4️⃣ Install Android SDK, Build-tools, and NDK
       - name: Install Android SDK + Build-tools + NDK
         run: |
           sudo mkdir -p /usr/local/android-sdk
@@ -47,20 +57,24 @@ jobs:
             "build-tools;33.0.2" \
             "ndk;23.1.7779620"
 
+          # Add SDK to PATH
           echo "/usr/local/android-sdk/platform-tools" >> $GITHUB_PATH
           echo "/usr/local/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
         shell: bash
 
+      # 5️⃣ Install Buildozer & Cython
       - name: Install Buildozer & Cython
         run: |
           python3.10 -m pip install --upgrade buildozer cython
         shell: bash
 
+      # 6️⃣ Build the APK
       - name: Build APK
         run: |
           python3.10 -m buildozer android debug --verbose
         shell: bash
 
+      # 7️⃣ Locate the APK
       - name: Locate APK
         id: find_apk
         run: |
@@ -74,8 +88,9 @@ jobs:
           fi
         shell: bash
 
+      # 8️⃣ Upload APK artifact (new v4)
       - name: Upload APK artifact
-        uses: actions/upload-artifact@v3
+        uses: github/actions/upload-artifact@v4
         with:
           name: android-apk
           path: ${{ steps.find_apk.outputs.apk_path }}
