@@ -34,32 +34,30 @@ jobs:
           python3.10 -m pip install --upgrade pip
         shell: bash
 
-      # 4️⃣ Install Android SDK, Build-tools, and NDK
+      # 4️⃣ Install Android SDK + Build-tools + NDK (FIXED)
       - name: Install Android SDK + Build-tools + NDK
         run: |
           sudo mkdir -p /usr/local/android-sdk
           sudo chown $USER /usr/local/android-sdk
           export ANDROID_SDK_ROOT=/usr/local/android-sdk
+          export PATH=$ANDROID_SDK_ROOT/cmdline-tools/latest/bin:$ANDROID_SDK_ROOT/platform-tools:$PATH
 
-          # Download command line tools
-          wget -q https://dl.google.com/android/repository/commandlinetools-linux-101.0.0_latest.zip -O cmdline-tools.zip
-          unzip -q cmdline-tools.zip -d /usr/local/android-sdk/cmdline-tools
-          mkdir -p /usr/local/android-sdk/cmdline-tools/latest
-          mv /usr/local/android-sdk/cmdline-tools/cmdline-tools/* /usr/local/android-sdk/cmdline-tools/latest/
+          # Download latest command line tools
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip -O cmdline-tools.zip
+          unzip -q cmdline-tools.zip -d $ANDROID_SDK_ROOT/cmdline-tools
+          mkdir -p $ANDROID_SDK_ROOT/cmdline-tools/latest
+          mv $ANDROID_SDK_ROOT/cmdline-tools/cmdline-tools/* $ANDROID_SDK_ROOT/cmdline-tools/latest/
 
           # Accept licenses
-          yes | /usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager --licenses
+          yes | sdkmanager --licenses
 
-          # Install required SDK packages
-          yes | /usr/local/android-sdk/cmdline-tools/latest/bin/sdkmanager \
-            "platform-tools" \
-            "platforms;android-33" \
-            "build-tools;33.0.2" \
-            "ndk;23.1.7779620"
+          # Update SDK manager and install required packages
+          sdkmanager --update
+          sdkmanager "platform-tools" "platforms;android-33" "build-tools;33.0.2" "ndk;23.1.7779620"
 
-          # Add SDK to PATH
-          echo "/usr/local/android-sdk/platform-tools" >> $GITHUB_PATH
-          echo "/usr/local/android-sdk/cmdline-tools/latest/bin" >> $GITHUB_PATH
+          # Add to PATH permanently for CI
+          echo "$ANDROID_SDK_ROOT/platform-tools" >> $GITHUB_PATH
+          echo "$ANDROID_SDK_ROOT/cmdline-tools/latest/bin" >> $GITHUB_PATH
         shell: bash
 
       # 5️⃣ Install Buildozer & Cython
@@ -74,14 +72,14 @@ jobs:
           python3.10 -m buildozer android debug --verbose
         shell: bash
 
-          # 7️⃣ Locate APK
+      # 7️⃣ Locate APK
       - name: Locate APK
         id: find_apk
         run: |
           echo "Searching for debug APK..."
-          # Print all APKs inside .buildozer for debugging
+          # Debug: print all APKs inside .buildozer
           find .buildozer -name "*.apk"
-          
+
           # Grab the first debug APK Buildozer generated
           APK=$(find .buildozer -name "*-debug.apk" | head -n1)
           if [ -z "$APK" ]; then
